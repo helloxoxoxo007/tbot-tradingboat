@@ -431,7 +431,7 @@ class TBOTDecoder(TbotObserver):
             timestamp,
         ) = self.extract_order_parameters(data_dict)
         orderRefEx = get_ordref_ex(timeframe, orderRef)
-        tvSecType = ("stock", "forex", "crypto")
+        tvSecType = ("stock", "forex", "crypto", "future")
         _contract = data_dict.get("contract", "").strip().lower()
         if _contract in tvSecType:
             contract = _contract
@@ -620,6 +620,8 @@ class TBOTDecoder(TbotObserver):
             if t_ord.contract == "forex"
             else "CRYPTO"
             if t_ord.contract == "crypto"
+            else "FUT"
+            if t_ord.contract == "future"
             else None
         )
         # Find the available cash balance in the appropriate currency
@@ -639,6 +641,15 @@ class TBOTDecoder(TbotObserver):
                 if item.tag == "AvailableFunds" and item.currency == currency
             )
         elif sec_type == "CRYPTO":
+            available_funds_str = next(
+                (
+                    item.value
+                    for item in account_summary
+                    if item.tag == "AvailableFunds"
+                ),
+                None,
+            )
+        elif sec_type == "FUT":
             available_funds_str = next(
                 (
                     item.value

@@ -10,6 +10,8 @@ from ib_insync import (
     Stock,
     Forex,
     Crypto,
+    Future,
+    ContFuture,
     IB,
     util,
     StopOrder,
@@ -115,6 +117,9 @@ class TbotOrder(ABC):
             contract = Forex(pair=t_ord.symbol)
         elif t_ord.contract == "crypto":
             contract = Crypto(t_ord.symbol, "PAXOS", t_ord.currency)
+        elif t_ord.contract == "future":
+            # Use ContFuture for continuous front-month contracts (e.g. ES1!)
+            contract = ContFuture(t_ord.symbol, "CME", t_ord.currency)
         else:
             logger.error(f"contract: {t_ord.contract} not implemented")
             return None
