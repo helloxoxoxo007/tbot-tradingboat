@@ -30,6 +30,6 @@ $TBOT_APP_HOME/tbottmux/pg_tmux_main.py -a start -c "$t_cmd" -w 'FLASK'
 sleep 1
 
 t_cmd="cd $TBOT_APP_HOME;\
-python src/tbot_tradingboat/main.py"
+PYTHONPATH=src python src/tbot_tradingboat/main.py"
 
 $TBOT_APP_HOME/tbottmux/pg_tmux_main.py -a start -c "$t_cmd" -w 'TBOT'
