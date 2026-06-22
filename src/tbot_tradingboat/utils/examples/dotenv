@@ -40,6 +40,8 @@ TBOT_DB_OFFICE=/tmp/tbot/tbot_sqlite3
 TBOT_IBKR_PORT=7497
 TBOT_IBKR_CLIENTID=1
 TBOT_IBKR_IPADDR=127.0.0.1
+# Allow stock orders outside regular trading hours (pre-market / after-hours). Use limit orders only.
+TBOT_OUTSIDE_RTH=False
 
 #-------------------------------------------------------------------
 # Debugging timestamp only for development

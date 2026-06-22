@@ -39,6 +39,7 @@ from tbot_tradingboat.pg_decoder.ib_api.tbot_api import (
     TBOT_ALL_CONTRACTS_NUM,
     TBOT_NO_OPEN_POSITIONS,
 )
+from tbot_tradingboat.utils.tbot_env import shared
 from .marketrules import TbotMarketRules
 from .tbot_order_event import TbotOrderEvent
 
@@ -104,6 +105,11 @@ class TbotOrder(ABC):
         self.orderdb.insert(get_timestamp(unique_ts), d_ord)
         if __debug__:
             self.orderdb.display()
+
+    def _apply_outside_rth(self, order, t_ord: OrderTV) -> None:
+        """Set outsideRth on stock orders when TBOT_OUTSIDE_RTH=True."""
+        if shared.outside_rth.lower() == "true" and t_ord.contract == "stock":
+            order.outsideRth = True
 
     def _get_contract(self, t_ord: OrderTV) -> Contract:
         """Chooses the specific contract from TV message'
@@ -413,6 +419,7 @@ class TbotOrder(ABC):
                 tif=t_ord.tif,
                 orderRef=t_ord.orderRef,
             )
+        self._apply_outside_rth(l_ord, t_ord)
         trade = self.ibsyn.placeOrder(contract, l_ord)
         d_ord = OrderDBInfo(
             t_ord.price,
@@ -450,6 +457,7 @@ class TbotOrder(ABC):
             tif=t_ord.tif,
             orderRef=t_ord.orderRef,
         )
+        self._apply_outside_rth(s_ord, t_ord)
         trade = self.ibsyn.placeOrder(contract, s_ord)
         d_ord = OrderDBInfo(
             t_ord.price,
@@ -490,6 +498,7 @@ class TbotOrder(ABC):
             tif=t_ord.tif,
             orderRef=t_ord.orderRef,
         )
+        self._apply_outside_rth(sl_ord, t_ord)
         trade = self.ibsyn.placeOrder(contract, sl_ord)
         d_ord = OrderDBInfo(
             t_ord.price,
@@ -533,6 +542,7 @@ class TbotOrder(ABC):
             m_ord = MarketOrder(
                 t_ord.action, t_ord.qty, tif=t_ord.tif, orderRef=t_ord.orderRef
             )
+        self._apply_outside_rth(m_ord, t_ord)
         trade = self.ibsyn.placeOrder(contract, m_ord)
         d_ord = OrderDBInfo(
             t_ord.price,
@@ -576,6 +586,7 @@ class TbotOrder(ABC):
         )
         # Loop through the bracket orders and place each order
         for idx, elm in enumerate(b_ords):
+            self._apply_outside_rth(elm, t_ord)
             trd = self.ibsyn.placeOrder(contract, elm)
             # Set the limit and stop prices based on the index of the bracket order
             if idx == 0:
@@ -638,6 +649,7 @@ class TbotOrder(ABC):
         )
         for i, elm in enumerate([parent, takeProfit]):
             logger.debug(f"placing bracket orderID: {elm.orderId}")
+            self._apply_outside_rth(elm, t_ord)
             trd = self.ibsyn.placeOrder(contract, elm)
             # Set the limit and stop prices based on the index of the bracket order
             if i == 0:
@@ -697,6 +709,7 @@ class TbotOrder(ABC):
         )
         for i, elm in enumerate([parent, takeProfit]):
             logger.debug(f"placing bracket orderID: {elm.orderId}")
+            self._apply_outside_rth(elm, t_ord)
             trd = self.ibsyn.placeOrder(contract, elm)
             # Set the limit and stop prices based on the index of the bracket order
             if i == 0:
@@ -754,6 +767,7 @@ class TbotOrder(ABC):
 
         for idx, elm in enumerate([parent, stopLoss]):
             logger.debug(f"placing bracket orderID: {elm.orderId}")
+            self._apply_outside_rth(elm, t_ord)
             trd = self.ibsyn.placeOrder(contract, elm)
             if idx == 0:
                 auxPrice = 0.0
@@ -814,6 +828,7 @@ class TbotOrder(ABC):
 
         for idx, elm in enumerate([parent, stopLoss]):
             logger.debug(f"placing bracket orderID: {elm.orderId}")
+            self._apply_outside_rth(elm, t_ord)
             trd = self.ibsyn.placeOrder(contract, elm)
             if idx == 0:
                 lmtPrice = entry_limit
@@ -884,6 +899,7 @@ class TbotOrder(ABC):
         )
         for idx, elm in enumerate([parent, takeProfit, stopLoss]):
             logger.debug(f"placing bracket orderID: {elm.orderId}")
+            self._apply_outside_rth(elm, t_ord)
             trd = self.ibsyn.placeOrder(contract, elm)
             if idx == 0:
                 lmtPrice = 0.0
@@ -958,6 +974,7 @@ class TbotOrder(ABC):
         )
         for idx, elm in enumerate([parent, takeProfit, stopLoss]):
             logger.debug(f"placing bracket orderID: {elm.orderId}")
+            self._apply_outside_rth(elm, t_ord)
             trd = self.ibsyn.placeOrder(contract, elm)
             if idx == 0:
                 lmtPrice = 0.0
