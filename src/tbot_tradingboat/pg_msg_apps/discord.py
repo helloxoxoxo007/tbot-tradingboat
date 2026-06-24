@@ -68,9 +68,9 @@ class DiscordObserver(TbotObserver):
         """Open the database"""
         if self.webhook:
             self.orderdb = TbotOrderDB()
-            self.orderdb.setup_connection(shared.db_office)
+            self.orderdb.setup_connection(shared.database_url)
             self.errordb = TbotErrorDB()
-            self.errordb.setup_connection(shared.db_office)
+            self.errordb.setup_connection(shared.database_url)
 
     def _webhook_excecute(self) -> Response:
         response = None

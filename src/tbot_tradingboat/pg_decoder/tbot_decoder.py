@@ -4,19 +4,17 @@ TradingBoat © Copyright, Plusgenie Limited 2023. All Rights Reserved.
 """
 from typing import Dict, Tuple
 import logging
-import os
 import sys
 import errno
 
 import socket
 import time
-import shutil
 import re
 from dataclasses import dataclass
-import sqlite3
 
 from ib_insync import util, IB, OrderStatus
 from loguru import logger
+from sqlalchemy.exc import SQLAlchemyError
 import numpy as np
 
 from tbot_tradingboat.pg_database.alertdb import TbotAlertDB
@@ -60,12 +58,11 @@ class TBOTDecoder(TbotObserver):
 
     def open(self):
         try:
-            self._copy_sqlite3_to_dest(shared.db_office, shared.db_home)
-            self.orderdb.setup_connection(shared.db_office)
-            self.alertdb.setup_connection(shared.db_office)
-            self.errordb.setup_connection(shared.db_office)
-        except sqlite3.OperationalError as err:
-            logger.exception(f"{err}: {shared.db_office}")
+            self.orderdb.setup_connection(shared.database_url)
+            self.alertdb.setup_connection(shared.database_url)
+            self.errordb.setup_connection(shared.database_url)
+        except SQLAlchemyError as err:
+            logger.exception(f"{err}: {shared.database_url}")
             raise
         else:
             logger.info("Successfully opened all databases.")
@@ -700,19 +697,6 @@ class TBOTDecoder(TbotObserver):
         """Enables ib insync logging"""
         util.logToConsole(level)
 
-    def _copy_sqlite3_to_dest(self, dest: str, src: str):
-        try:
-            if os.path.exists(src):
-                if os.path.exists(dest):
-                    logger.debug(f"sqlite3: overwriting {dest}")
-                shutil.move(src, dest)
-        except IOError as err:
-            logger.critical(f"sqlite3: unable to overwrite file {err}")
-            raise
-        except Exception as err:
-            logger.critical(f"sqlite3: unexpected file error: {err}")
-            raise
-
     def _close_ib(self):
         """Closes ib_insync connection"""
         if self.loop:
@@ -723,7 +707,7 @@ class TBOTDecoder(TbotObserver):
                 self.ibsyn.disconnect()
 
     def _close_db(self):
-        logger.info("closing sqlite3")
+        logger.info("closing database connections")
         if self.torder:
             self.torder.close()
         if self.alertdb:
@@ -732,7 +716,6 @@ class TBOTDecoder(TbotObserver):
             self.orderdb.close()
         if self.errordb:
             self.errordb.close()
-        self._copy_sqlite3_to_dest(shared.db_home, shared.db_office)
 
     def close(self):
         """

@@ -266,14 +266,22 @@ def open_db(db_type: DatabaseType = DatabaseType.ORDER_DB) -> object:
 def open_orderdb() -> object:
     """Open the Order database connection"""
     dbase = TbotOrderDB()
-    dbase.setup_connection(os.environ.get("TBOT_DB_OFFICE", "/run/tbot/tbot_sqlite3"))
+    dbase.setup_connection(
+        os.environ.get(
+            "TBOT_DATABASE_URL", "postgresql+psycopg2://tbot:tbot@127.0.0.1:5432/tbot"
+        )
+    )
     return dbase
 
 
 def open_alertdb() -> object:
     """Open the Alert database connection"""
     dbase = TbotAlertDB()
-    dbase.setup_connection(os.environ.get("TBOT_DB_OFFICE", "/run/tbot/tbot_sqlite3"))
+    dbase.setup_connection(
+        os.environ.get(
+            "TBOT_DATABASE_URL", "postgresql+psycopg2://tbot:tbot@127.0.0.1:5432/tbot"
+        )
+    )
     return dbase
 
 

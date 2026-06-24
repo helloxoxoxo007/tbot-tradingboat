@@ -55,16 +55,13 @@ class EnvSettings:
         default_factory=partial(os.environ.get, "TBOT_REDIS_READ_TIMEOUT_MS", "40")
     )
     # ---------------------------------
-    # SQLite3 Database
+    # PostgreSQL Database
     # ---------------------------------
-    db_home: str = field(
+    database_url: str = field(
         default_factory=partial(
-            os.environ.get, "TBOT_DB_HOME", "/home/tbot/tbot_sqlite3"
-        )
-    )
-    db_office: str = field(
-        default_factory=partial(
-            os.environ.get, "TBOT_DB_OFFICE", "/home/tbot/tbot_sqlite3"
+            os.environ.get,
+            "TBOT_DATABASE_URL",
+            "postgresql+psycopg2://tbot:tbot@127.0.0.1:5432/tbot",
         )
     )
     # ---------------------------------

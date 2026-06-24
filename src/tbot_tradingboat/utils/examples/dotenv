@@ -28,11 +28,9 @@ TBOT_USES_REDIS_STREAM=1
 TBOT_REDIS_READ_TIMEOUT_MS=40
 
 #-------------------------------------------------------------------
-# SQLITE3: Database for Alerts, Order
+# PostgreSQL: Database for Alerts, Order, Error
 #-------------------------------------------------------------------
-TBOT_DB_HOME=/home/tbot/tbot_sqlite3
-# tmpfs can be used for DB_OFFICE for fast operation such as /run, /tmp
-TBOT_DB_OFFICE=/tmp/tbot/tbot_sqlite3
+TBOT_DATABASE_URL=postgresql+psycopg2://tbot:tbot@127.0.0.1:5432/tbot
 
 #-------------------------------------------------------------------
 # Interactive Brokers

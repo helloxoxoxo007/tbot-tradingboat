@@ -2,10 +2,11 @@
 """
 TradingBoat © Copyright, Plusgenie Limited 2023. All Rights Reserved.
 """
-import sqlite3
 from typing import List
 from loguru import logger
 import pandas as pd
+from sqlalchemy import create_engine
+from sqlalchemy.exc import SQLAlchemyError
 
 from tbot_tradingboat.pg_decoder.ib_api.tbot_api import get_timestamp
 from tbot_tradingboat.utils.objects import ErrorDBInfo
@@ -18,44 +19,35 @@ class TbotErrorDB(TbotDatabase):
     """
 
     def __init__(self):
-        self.conn = None
-        self.cursor = None
-        super().__init__(self.conn, self.cursor)
-        self.host = None
-        self.port = None
+        self.engine = None
+        super().__init__(self.engine)
 
-    def setup_connection(self, db_path: str, host=None, port=None):
+    def setup_connection(self, db_url: str):
         """
-        Connect to sqlite3
+        Connect to PostgreSQL
 
         Args:
-            db_path (str): the path to sqlite3 socket
-            host (str): the hostname of the remote SQLite server
-            port (int): the port number of the remote SQLite server
+            db_url (str): SQLAlchemy connection URL,
+                e.g. postgresql+psycopg2://user:pass@host:5432/dbname
         """
         try:
-            if host and port:
-                self.conn = sqlite3.connect(f"sqlite://{host}:{port}/{db_path}")
-                self.host = host
-                self.port = port
-            else:
-                self.conn = sqlite3.connect(db_path)
-            self.cursor = self.conn.cursor()
-        except sqlite3.Error as err:
-            logger.error(f"{err}: {db_path}")
+            self.engine = create_engine(db_url)
+        except SQLAlchemyError as err:
+            logger.error(f"{err}: {db_url}")
             raise
         sql_query = """
             CREATE TABLE IF NOT EXISTS TBOTERRORS (
-                timestamp DATETIME DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
-                reqid,
-                errcode,
-                symbol,
-                errstr
+                id BIGSERIAL PRIMARY KEY,
+                timestamp TIMESTAMP NOT NULL DEFAULT NOW(),
+                reqid DOUBLE PRECISION,
+                errcode INTEGER,
+                symbol VARCHAR(32),
+                errstr TEXT
             )
         """
         self._exec(sql_query)
         self.create_trigger("TBOTERRORS", "timestamp")
-        logger.success("Connected to error database sqlit3")
+        logger.success("Connected to error database (PostgreSQL)")
 
     def insert(self, unique_ts: int, obj: ErrorDBInfo):
         """Insert error information into the table"""
@@ -72,10 +64,10 @@ class TbotErrorDB(TbotDatabase):
 
     def display(self):
         """Display the Error table"""
-        if self.conn is None:
+        if self.engine is None:
             return
         sql_query = "SELECT * FROM TBOTERRORS ORDER BY timestamp DESC LIMIT 12"
-        data_f = pd.read_sql_query(sql_query, self.conn)
+        data_f = pd.read_sql_query(sql_query, self.engine)
         logger.trace("\n" + data_f.to_string())
 
     def find_error_by_uniquekey(self, unique: str) -> object:

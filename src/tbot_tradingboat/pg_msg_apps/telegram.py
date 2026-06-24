@@ -45,9 +45,9 @@ class TelegramObserver(TbotObserver):
     def open(self):
         if self.bot:
             self.orderdb = TbotOrderDB()
-            self.orderdb.setup_connection(shared.db_office)
+            self.orderdb.setup_connection(shared.database_url)
             self.errordb = TbotErrorDB()
-            self.errordb.setup_connection(shared.db_office)
+            self.errordb.setup_connection(shared.database_url)
 
     def _send_msg(self, title: str, msg: str):
         """

@@ -3,13 +3,13 @@
 TradingBoat © Copyright, Plusgenie Limited 2023. All Rights Reserved.
 """
 import sys
-import traceback
 import time
 from typing import List, Dict
 
-import sqlite3
 from loguru import logger
 import pandas as pd
+from sqlalchemy import create_engine
+from sqlalchemy.exc import SQLAlchemyError
 
 from ib_insync import (
     OrderStatus,
@@ -40,57 +40,45 @@ class TbotOrderDB(TbotDatabase):
     """
 
     def __init__(self):
-        self.conn = None
-        self.cursor = None
-        super().__init__(self.conn, self.cursor)
-        self.host = None
-        self.port = None
+        self.engine = None
+        super().__init__(self.engine)
 
-    def setup_connection(self, db_path: str, host=None, port=None):
+    def setup_connection(self, db_url: str):
         """
-        Connect to sqlite3
+        Connect to PostgreSQL
 
         Args:
-            db_path (str): the path to sqlite3 socket
-            host (str): the hostname of the remote SQLite server
-            port (int): the port number of the remote SQLite server
+            db_url (str): SQLAlchemy connection URL,
+                e.g. postgresql+psycopg2://user:pass@host:5432/dbname
         """
         try:
-            if host and port:
-                self.conn = sqlite3.connect(f"sqlite://{host}:{port}/{db_path}")
-                self.host = host
-                self.port = port
-            else:
-                self.conn = sqlite3.connect(db_path)
-
-            # Set cache size to 10,000 pages: 40 Mbytes
-            self.conn.execute("PRAGMA cache_size = 10000")
-            self.cursor = self.conn.cursor()
-        except sqlite3.Error as err:
-            logger.error(f"{err}: {db_path}")
+            self.engine = create_engine(db_url)
+        except SQLAlchemyError as err:
+            logger.error(f"{err}: {db_url}")
             raise
 
         sql_query = """
         CREATE TABLE IF NOT EXISTS TBOTORDERS (
-            timestamp DATETIME DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
-            uniquekey,
-            tv_price,
-            orderid,
-            ticker,
-            action,
-            ordertype,
-            lmtprice,
-            auxprice,
-            qty,
-            avgfillprice,
-            orderstatus,
-            orderref,
-            parentid,
-            position,
-            mrkvalue,
-            avgprice,
-            unrealizedpnl,
-            realizedpnl
+            id BIGSERIAL PRIMARY KEY,
+            timestamp TIMESTAMP NOT NULL DEFAULT NOW(),
+            uniquekey VARCHAR(32),
+            tv_price DOUBLE PRECISION,
+            orderid INTEGER,
+            ticker VARCHAR(32),
+            action VARCHAR(16),
+            ordertype VARCHAR(16),
+            lmtprice DOUBLE PRECISION,
+            auxprice DOUBLE PRECISION,
+            qty DOUBLE PRECISION,
+            avgfillprice DOUBLE PRECISION,
+            orderstatus VARCHAR(32),
+            orderref VARCHAR(64),
+            parentid INTEGER,
+            position DOUBLE PRECISION,
+            mrkvalue DOUBLE PRECISION,
+            avgprice DOUBLE PRECISION,
+            unrealizedpnl DOUBLE PRECISION,
+            realizedpnl DOUBLE PRECISION
         )"""
         self._exec(sql_query)
 
@@ -103,7 +91,7 @@ class TbotOrderDB(TbotDatabase):
 
         self.create_trigger("TBOTORDERS", "uniquekey")
         self.delete_stale_portfolio()
-        logger.success("Connected to Order Database sqlit3")
+        logger.success("Connected to Order Database (PostgreSQL)")
 
     def insert(self, unique_ts, obj: OrderDBInfo):
         """Insert a new entry into TBOTORDERS"""
@@ -151,53 +139,11 @@ class TbotOrderDB(TbotDatabase):
         )
         self._exec(sql_query, sql_data)
 
-    def query_n_fetch(self, sql_query, sql_data=None) -> List[object]:
-        """
-        Query sqlite3 and then get results by Row Factory
-        Note that the database should be opened by connect_rowfactory()
-        """
-        ret = []
-        if self.conn is None:
-            return
-        try:
-            values = None
-            if sql_data:
-                values = self.cursor.execute(sql_query, sql_data).fetchall()
-            else:
-                values = self.cursor.execute(sql_query).fetchall()
-            # Insert needs commit
-            self.conn.commit()
-            ret = [{k: item[k] for k in item.keys()} for item in values]
-        except sqlite3.Error as err:
-            logger.error(f"SQL: {sql_query}")
-            logger.error(f"SQLite error: {err.args}")
-            logger.error("Exception class is: ", err.__class__)
-            logger.error("SQLite traceback: ")
-            exc_type, exc_value, exc_tb = sys.exc_info()
-            logger.error(traceback.format_exception(exc_type, exc_value, exc_tb))
-            self.conn.close()
-            ret = []
-        return ret
-
-    def connect_rowfactory(self, db_path: str):
-        """
-        Open database by readonly using Row Factory
-        """
-        try:
-            addr = "file:" + db_path + "?mode=ro"
-            self.conn = sqlite3.connect(addr, uri=True)
-            self.conn.row_factory = sqlite3.Row
-            self.cursor = self.conn.cursor()
-            logger.success("Connected to Order Database(Readonly)")
-        except sqlite3.Error as err:
-            logger.error(err)
-            raise
-
     def find_specified_orders(self, key: OrderKey, num: int) -> List[Dict]:
         """
         Find N specified orders in the order table.
         """
-        if self.conn:
+        if self.engine:
             logger.debug(f"find_specified_orders: {key.symbol}, {key.orderRef}")
             sql_query = (
                 "SELECT * FROM TBOTORDERS WHERE (ticker=? and orderref=?) "
@@ -241,7 +187,7 @@ class TbotOrderDB(TbotDatabase):
             Dict: The order with the specified key and status is found,
             {}: otherwise.
         """
-        if not self.conn:
+        if not self.engine:
             logger.error("db: connection is not ready")
             return {}
 
@@ -316,7 +262,7 @@ class TbotOrderDB(TbotDatabase):
         """
         Find the specified order using OrderKeyEx in the order table
         """
-        if not self.conn:
+        if not self.engine:
             logger.error("db: connection is not ready")
             return {}
 
@@ -356,7 +302,7 @@ class TbotOrderDB(TbotDatabase):
             []: otherwise.
         """
         results = []
-        if self.conn:
+        if self.engine:
             sql_query = (
                 "SELECT * FROM TBOTORDERS "
                 "WHERE (ticker=? AND orderref=?) "
@@ -389,7 +335,7 @@ class TbotOrderDB(TbotDatabase):
 
         The unique key is a timestamp that is shared between the alert database and order database.
         If the timestamp is not available from the Redis stream, it will be created on the fly.
-        If there is no sqlite3 database when TBOT boots up, it will create open orders from events
+        If there is no database when TBOT boots up, it will create open orders from events
         and generate a new timestamp as well.
 
         This function can be used by an observer to easily access the alert and order database.
@@ -419,7 +365,7 @@ class TbotOrderDB(TbotDatabase):
         Returns:
             dict: A dictionary containing information about the order, or an empty one if not found.
         """
-        if self.conn:
+        if self.engine:
             sql_query = "SELECT * FROM TBOTORDERS WHERE orderid = ?"
             sql_data = (ord_id,)
             rows = self._exec(sql_query, sql_data)
@@ -433,13 +379,14 @@ class TbotOrderDB(TbotDatabase):
         """
         Find an order by orderId
         """
-        if self.conn:
-            sql_query = "SELECT EXISTS(SELECT 1 FROM TBOTORDERS WHERE orderid = ?)"
+        if self.engine:
+            sql_query = (
+                "SELECT EXISTS(SELECT 1 FROM TBOTORDERS WHERE orderid = ?) "
+                "AS exists_flag"
+            )
             sql_data = (ord_id,)
             result = self._exec(sql_query, sql_data)
-            row_exists = bool(
-                result[0]["EXISTS(SELECT 1 FROM TBOTORDERS WHERE orderid = ?)"]
-            )
+            row_exists = bool(result[0]["exists_flag"])
             logger.debug(f"find_order| row_exists:{row_exists}")
             return row_exists
         else:
@@ -477,8 +424,8 @@ class TbotOrderDB(TbotDatabase):
             "UPDATE TBOTORDERS SET "
             "uniquekey=?,tv_price=?,position=?,avgfillprice=?,mrkvalue=?, "
             "unrealizedpnl=?,realizedpnl=? "
-            "WHERE ROWID IN "
-            "(SELECT ROWID FROM TBOTORDERS WHERE (ticker=? and orderref=? and action=?) "
+            "WHERE id IN "
+            "(SELECT id FROM TBOTORDERS WHERE (ticker=? and orderref=? and action=?) "
             "ORDER BY uniquekey DESC LIMIT 1)"
         )
         sql_data = (
@@ -516,7 +463,7 @@ class TbotOrderDB(TbotDatabase):
         """
         sql_query = (
             "UPDATE TBOTORDERS SET position=? "
-            "WHERE ROWID IN (SELECT ROWID FROM TBOTORDERS "
+            "WHERE id IN (SELECT id FROM TBOTORDERS "
             "WHERE (ticker=? and orderref=? and action=?) "
             "ORDER BY uniquekey DESC LIMIT 1)"
         )
@@ -537,7 +484,7 @@ class TbotOrderDB(TbotDatabase):
         sql_query = "DELETE from TBOTORDERS WHERE orderstatus = ? and uniquekey < ? "
         sql_data = (TBOT_PORTFOLIO_ORDERSTATUS, timestamp)
         self._exec(sql_query, sql_data)
-        logger.debug(f"Total number of rows deleted :{self.conn.total_changes}")
+        logger.debug(f"Total number of rows deleted :{self.last_rowcount}")
 
     def update_cancelled_order(self, ord_id: int) -> bool:
         """Track cancelled order until orderstatus is updated during trading hours
@@ -634,8 +581,8 @@ class TbotOrderDB(TbotDatabase):
 
     def display(self):
         """Display the Order table"""
-        if self.conn is None:
+        if self.engine is None:
             return
         sql_query = "SELECT * FROM TBOTORDERS ORDER BY uniquekey DESC LIMIT 12"
-        data_f = pd.read_sql_query(sql_query, self.conn)
+        data_f = pd.read_sql_query(sql_query, self.engine)
         logger.debug("\n" + data_f.to_string())

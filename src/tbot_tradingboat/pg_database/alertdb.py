@@ -2,11 +2,12 @@
 """
 TradingBoat © Copyright, Plusgenie Limited 2023. All Rights Reserved.
 """
-import sqlite3
 from typing import List, Dict
 
 import pandas as pd
 from loguru import logger
+from sqlalchemy import create_engine
+from sqlalchemy.exc import SQLAlchemyError
 
 from tbot_tradingboat.pg_decoder.ib_api.tbot_api import get_timestamp
 from tbot_tradingboat.utils.objects import (
@@ -22,63 +23,39 @@ class TbotAlertDB(TbotDatabase):
     """
 
     def __init__(self):
-        self.conn = None
-        self.cursor = None
-        super().__init__(self.conn, self.cursor)
-        self.host = None
-        self.port = None
+        self.engine = None
+        super().__init__(self.engine)
 
-    def setup_connection(self, db_path, host=None, port=None):
+    def setup_connection(self, db_url):
         """
-        Connect to sqlite3
+        Connect to PostgreSQL
 
         Args:
-            db_path (str): the path to sqlite3 socket
-            host (str): the hostname of the remote SQLite server
-            port (int): the port number of the remote SQLite server
+            db_url (str): SQLAlchemy connection URL,
+                e.g. postgresql+psycopg2://user:pass@host:5432/dbname
         """
         try:
-            if host and port:
-                self.conn = sqlite3.connect(f"sqlite://{host}:{port}/{db_path}")
-                self.host = host
-                self.port = port
-            else:
-                self.conn = sqlite3.connect(db_path)
-            self.cursor = self.conn.cursor()
-
-            # Retrieve the page size of the database in bytes
-            page_size_query = "PRAGMA page_size;"
-            page_size = self.conn.execute(page_size_query).fetchone()[0]
-
-            # Set the cache size to 32MB (in bytes)
-            cache_size = 32 * 1024 * 1024
-
-            # Calculate the number of pages in the cache
-            num_cache_pages = cache_size // page_size
-
-            # Set the cache size using PRAGMA cache_size
-            cache_size_query = f"PRAGMA cache_size = {-num_cache_pages};"
-            self._exec(cache_size_query)
-
-        except sqlite3.Error as err:
-            logger.error(f"{err}: {db_path}")
+            self.engine = create_engine(db_url)
+        except SQLAlchemyError as err:
+            logger.error(f"{err}: {db_url}")
             raise
         sql_query = """
             CREATE TABLE IF NOT EXISTS TBOTALERTS (
-                timestamp DATETIME DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
-                uniquekey,
-                tv_timestamp,
-                ticker,
-                direction,
-                timeframe,
-                qty,
-                orderref,
-                alertstatus,
-                entrylimit,
-                entrystop,
-                exitlimit,
-                exitstop,
-                tv_price
+                id BIGSERIAL PRIMARY KEY,
+                timestamp TIMESTAMP NOT NULL DEFAULT NOW(),
+                uniquekey VARCHAR(32),
+                tv_timestamp VARCHAR(32),
+                ticker VARCHAR(32),
+                direction VARCHAR(32),
+                timeframe VARCHAR(16),
+                qty DOUBLE PRECISION,
+                orderref VARCHAR(64),
+                alertstatus VARCHAR(32),
+                entrylimit DOUBLE PRECISION,
+                entrystop DOUBLE PRECISION,
+                exitlimit DOUBLE PRECISION,
+                exitstop DOUBLE PRECISION,
+                tv_price DOUBLE PRECISION
             )
         """
         self._exec(sql_query)
@@ -88,7 +65,7 @@ class TbotAlertDB(TbotDatabase):
         self._exec(sql_query)
 
         self.create_trigger("TBOTALERTS", "uniquekey")
-        logger.success("Connected to Alert Database sqlit3")
+        logger.success("Connected to Alert Database (PostgreSQL)")
 
     def insert(self, unique_ts: str, obj: AlertDBInfo):
         sql_query = """
@@ -131,7 +108,7 @@ class TbotAlertDB(TbotDatabase):
         """
         Find N specified orders in the order table.
         """
-        if self.conn:
+        if self.engine:
             logger.debug(f"find_specified_orders: {key.symbol}, {key.orderRef}")
             sql_query = (
                 "SELECT * FROM TBOTALERTS WHERE (ticker=? and orderref=?) "
@@ -155,8 +132,8 @@ class TbotAlertDB(TbotDatabase):
 
     def display(self):
         """Display the Alert table"""
-        if self.conn is None:
+        if self.engine is None:
             return
         sql_query = "SELECT * FROM TBOTALERTS ORDER BY uniquekey DESC LIMIT 12"
-        data_f = pd.read_sql_query(sql_query, self.conn)
+        data_f = pd.read_sql_query(sql_query, self.engine)
         logger.debug("\n" + data_f.to_string())
