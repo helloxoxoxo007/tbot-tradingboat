@@ -168,6 +168,18 @@ class TbotOrderEvent(ABC):
             f"errStr:{errStr}, contract: {sym}"
         )
         logger.debug(msg)
+        if errCode == 399:
+            logger.warning(
+                f"[orderId={reqId}] IB error 399: market order rejected outside RTH "
+                "— auto-cancelling stuck PreSubmitted order"
+            )
+            for trade in self.ibsyn.trades():
+                if (
+                    trade.order.orderId == reqId
+                    and trade.orderStatus.status == "PreSubmitted"
+                ):
+                    self.ibsyn.cancelOrder(trade.order)
+                    break
         # if errorCode in msg_codes:
         if errCode >= -1:
             err_msg = ErrorDBInfo(
