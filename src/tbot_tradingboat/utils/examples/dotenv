@@ -40,7 +40,9 @@ TBOT_DB_OFFICE=/tmp/tbot/tbot_sqlite3
 TBOT_IBKR_PORT=7497
 TBOT_IBKR_CLIENTID=1
 TBOT_IBKR_IPADDR=127.0.0.1
-# Allow stock orders outside regular trading hours (pre-market / after-hours). Use limit orders only.
+# Allow stock orders outside regular trading hours (pre-market / after-hours).
+# WARNING: Only limit orders work outside RTH. Set entry.limit in your webhook payload.
+# Market orders (all-zero metrics) will be rejected by IB with error 399.
 TBOT_OUTSIDE_RTH=False
 
 #-------------------------------------------------------------------

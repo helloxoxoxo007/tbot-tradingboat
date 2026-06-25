@@ -109,7 +109,13 @@ class TbotOrder(ABC):
     def _apply_outside_rth(self, order, t_ord: OrderTV) -> None:
         """Set outsideRth on stock orders when TBOT_OUTSIDE_RTH=True."""
         if shared.outside_rth.lower() == "true" and t_ord.contract == "stock":
-            order.outsideRth = True
+            if order.orderType != "MKT":
+                order.outsideRth = True
+            else:
+                logger.warning(
+                    "TBOT_OUTSIDE_RTH=True ignored for MKT order "
+                    "(IB error 399): set entry.limit in your webhook payload"
+                )
 
     def _get_contract(self, t_ord: OrderTV) -> Contract:
         """Chooses the specific contract from TV message'
